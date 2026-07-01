@@ -1,2 +1,39 @@
-schedule:
-    - cron: '0 11 * * *'
+name: Daily Tech News Agent
+
+on:
+  schedule:
+    # Triggers every single day at 7:00 AM MMT (12:30 AM UTC)
+    - cron: '30 0 * * *'
+  
+  # This button lets you test it manually from GitHub anytime
+  workflow_dispatch: 
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Pull your agent code from the repository
+    - name: Checkout Repository Code
+      uses: actions/checkout@v4
+
+    # 2. Prepare the cloud environment with Python
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    # 3. Install the required tools
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install google-genai edge-tts feedparser requests
+
+    # 4. Inject your API keys and run the briefing script
+    - name: Run Morning News Agent
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: |
+        python agent.py
