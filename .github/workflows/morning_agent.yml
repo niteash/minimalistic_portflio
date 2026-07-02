@@ -2,11 +2,11 @@ name: Daily Tech News Agent
 
 on:
   schedule:
-    # Triggers every single day at 7:00 AM MMT (12:30 AM UTC)
+    # Triggers every single day at 7:04 AM MMT (12:34 AM UTC) to bypass server peak load
     - cron: '34 0 * * *'
-  
+
   # This button lets you test it manually from GitHub anytime
-  workflow_dispatch: 
+  workflow_dispatch:
 
 jobs:
   build-and-run:
@@ -37,3 +37,14 @@ jobs:
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
         python agent.py
+
+    # 5. Expose the audio file so you can download it directly from the GitHub Actions dashboard
+    - name: Upload Audio Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: daily-briefing-audio
+        path: morning_briefing.mp3
+  
+
+
+
