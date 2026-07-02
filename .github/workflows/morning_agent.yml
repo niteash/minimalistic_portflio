@@ -3,7 +3,7 @@ name: Daily Tech News Agent
 on:
   schedule:
     # Triggers every single day at 7:00 AM MMT (12:30 AM UTC)
-    - cron: '30 0 * * *'
+    - cron: '34 0 * * *'
   
   # This button lets you test it manually from GitHub anytime
   workflow_dispatch: 
