@@ -7,19 +7,27 @@ from google import genai
 from google.genai import errors
 import edge_tts
 
-# 1. Fetch Tech Headlines via RSS
+# 1. Fetch Tech Headlines via RSS (Kept in English; Gemini will handle the translation)
 def get_headlines():
     print("🔄 Fetching latest tech news...")
     feed = feedparser.parse("https://news.ycombinator.com/rss")
     headlines = [item.title for item in feed.entries[:15]]
     return "\n".join(headlines)
 
-# 2. Generate a Conversational Script using Free Gemini API
+# 2. Generate a Conversational Script in Burmese
 def generate_script(raw_news):
-    print("🧠 Generating script with Gemini...")
+    print("🧠 Generating Burmese script with Gemini...")
     client = genai.Client()
     
-    prompt = f"You are a professional daily tech news podcast host. Summarize these headlines into an engaging, cohesive 1-minute morning news update. Use clear transitions. Avoid all markdown formatting, bullet points, asterisks, or symbols, as this text will be read directly by a text-to-speech engine. Content:\n{raw_news}"
+    # Prompt updated to force conversational, spoken Burmese
+    prompt = (
+        "You are a professional daily tech news podcast host speaking in Burmese (Myanmar language). "
+        "Summarize these English headlines into an engaging, cohesive 1-minute morning news update written entirely in natural, spoken Burmese. "
+        "Translate English technical concepts into standard Burmese terms, or phonetically transliterate common terms (like AI, Google, Microsoft, software) "
+        "so they flow naturally when read by a Burmese text-to-speech engine. "
+        "Avoid all markdown formatting, bullet points, asterisks, or symbols. Output ONLY plain, spoken Burmese text. Content:\n"
+        f"{raw_news}"
+    )
     
     for attempt in range(3):
         try:
@@ -35,14 +43,15 @@ def generate_script(raw_news):
                 continue
             raise e
 
-# 3. Convert Text to Natural Speech
+# 3. Convert Text to Natural Speech using a Burmese Voice
 async def text_to_speech(text, output_file="morning_briefing.mp3"):
-    print("🎙️ Synthesizing voice...")
-    communicate = edge_tts.Communicate(text, "en-US-AndrewNeural")
+    print("🎙️ Synthesizing voice (Burmese)...")
+    # Using 'my-MM-ThihaNeural' (Male). Swap with 'my-MM-NilarNeural' for Female.
+    communicate = edge_tts.Communicate(text, "my-MM-ThihaNeural")
     await communicate.save(output_file)
     print(f"✅ Success! Your briefing is saved to {output_file}")
 
-# 4. NEW: Send the compiled audio directly to your Telegram Bot
+# 4. Send the compiled audio directly to Telegram with localized Burmese caption
 def send_to_telegram(file_path="morning_briefing.mp3"):
     print("🚀 Uploading audio briefing to Telegram...")
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -53,7 +62,8 @@ def send_to_telegram(file_path="morning_briefing.mp3"):
         return
 
     url = f"https://api.telegram.org/bot{bot_token}/sendAudio"
-    payload = {"chat_id": chat_id, "caption": "🌅 Your Morning Tech News Briefing is ready!"}
+    # Localized caption
+    payload = {"chat_id": chat_id, "caption": "🌅 သင်၏ မနက်ခင်း နည်းပညာ သတင်း အကျဉ်းချုပ် အဆင်သင့်ဖြစ်ပါပြီ!"}
     
     try:
         with open(file_path, "rb") as audio_file:
