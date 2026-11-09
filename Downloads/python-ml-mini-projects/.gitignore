@@ -1,0 +1,18 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Project outputs
+project-05/output/
+project-*/.seaborn_cache/
+project-08/quotes.csv
+project-09/data/
+project-09/sales_report.txt
+.venv/
+
+# OS
+.DS_Store

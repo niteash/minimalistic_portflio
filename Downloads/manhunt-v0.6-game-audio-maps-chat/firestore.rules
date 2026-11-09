@@ -1,0 +1,174 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signed() { return request.auth != null; }
+    function roomPath(id) { return /databases/$(database)/documents/rooms/$(id); }
+    function playerPath(id, uid) {
+      return /databases/$(database)/documents/rooms/$(id)/players/$(uid);
+    }
+    function room(id) { return get(roomPath(id)).data; }
+    function isMember(id) {
+      return signed() && exists(playerPath(id, request.auth.uid));
+    }
+    function isHost(id) {
+      return signed() && room(id).hostUid == request.auth.uid;
+    }
+    function validLocation(value) {
+      return value == null || (
+        value.keys().hasOnly(['latitude', 'longitude', 'updatedAt']) &&
+        value.latitude is number && value.latitude >= -90 && value.latitude <= 90 &&
+        value.longitude is number && value.longitude >= -180 && value.longitude <= 180 &&
+        value.updatedAt is number && value.updatedAt > 0
+      );
+    }
+
+    match /rooms/{id} {
+      // Only a signed-in participant with an invite code can look up a room.
+      // Room LIST is never available; do not publish invite codes.
+      allow get: if signed();
+      allow list, delete: if false;
+
+      // Creating the room and its host player MUST be one atomic batch.
+      // This prevents a room without a player document (a common source of
+      // 'missing or insufficient permissions' on the players listener).
+      allow create: if signed() && id.matches('^[A-Z2-9]{8}$') &&
+        request.resource.data.keys().hasOnly([
+          'hostUid','status','finishReason','createdAt','startedAt','durationSeconds',
+          'radiusMeters','pingIntervalSeconds','center'
+        ]) &&
+        request.resource.data.hostUid == request.auth.uid &&
+        request.resource.data.status == 'lobby' &&
+        request.resource.data.finishReason == '' &&
+        request.resource.data.startedAt == 0 &&
+        request.resource.data.durationSeconds == 1800 &&
+        request.resource.data.pingIntervalSeconds == 180 &&
+        request.resource.data.radiusMeters in [150,250,400] &&
+        request.resource.data.createdAt is number &&
+        request.resource.data.center.keys().hasOnly(['latitude','longitude']) &&
+        request.resource.data.center.latitude is number &&
+        request.resource.data.center.latitude >= -90 &&
+        request.resource.data.center.latitude <= 90 &&
+        request.resource.data.center.longitude is number &&
+        request.resource.data.center.longitude >= -180 &&
+        request.resource.data.center.longitude <= 180 &&
+        getAfter(playerPath(id, request.auth.uid)).data.uid == request.auth.uid;
+
+      allow update: if signed() && isHost(id) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status','startedAt','finishReason']) && (
+          // The host commits player roles and room start in ONE transaction.
+          (resource.data.status == 'lobby' &&
+            request.resource.data.status == 'active' &&
+            request.resource.data.startedAt is number &&
+            request.resource.data.startedAt > 0 &&
+            request.resource.data.finishReason == '' &&
+            getAfter(playerPath(id, request.auth.uid)).data.team in ['hunter','runner']) ||
+          (resource.data.status == 'active' &&
+            request.resource.data.status == 'finished' &&
+            request.resource.data.startedAt == resource.data.startedAt &&
+            request.resource.data.finishReason in ['all_caught','timeout','host_stopped'])
+        );
+
+      // Room-wide channel: visible to all enrolled players, never to strangers.
+      // This enables communication in a 2-player Hunter-vs-Runner match.
+      match /publicMessages/{messageId} {
+        allow get, list: if isMember(id) && room(id).status in ['active', 'finished'];
+        allow create: if isMember(id) && room(id).status == 'active' &&
+          request.resource.data.keys().hasOnly(['senderUid', 'text', 'createdAt']) &&
+          request.resource.data.senderUid == request.auth.uid &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() >= 1 &&
+          request.resource.data.text.size() <= 160 &&
+          request.resource.data.createdAt is number &&
+          request.resource.data.createdAt > 0;
+        allow update, delete: if false;
+      }
+
+      // The other team's messages are not readable by a player's Firebase UID.
+      // All senders must be authenticated members with that assigned role.
+      match /teamMessages/{team}/messages/{messageId} {
+        function sameTeam() {
+          return signed() && team in ['hunter', 'runner'] &&
+            isMember(id) &&
+            get(playerPath(id, request.auth.uid)).data.team == team;
+        }
+        allow get, list: if sameTeam() && room(id).status in ['active', 'finished'];
+        allow create: if sameTeam() && room(id).status == 'active' &&
+          request.resource.data.keys().hasOnly(['senderUid', 'text', 'createdAt']) &&
+          request.resource.data.senderUid == request.auth.uid &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() >= 1 &&
+          request.resource.data.text.size() <= 160 &&
+          request.resource.data.createdAt is number &&
+          request.resource.data.createdAt > 0;
+        allow update, delete: if false;
+      }
+
+      match /players/{playerUid} {
+        // Only players in the room can see the roster; never allow outsiders
+        // to list room players. The owner record is created atomically with a
+        // new room, so the membership check works as soon as a room is visible.
+        allow get, list: if isMember(id);
+
+        allow create: if signed() && playerUid == request.auth.uid &&
+          getAfter(roomPath(id)).data.status == 'lobby' &&
+          request.resource.data.keys().hasOnly([
+            'uid','name','team','ready','caught','joinedAt','location','lastPingAt','sharingEnabled'
+          ]) &&
+          request.resource.data.uid == request.auth.uid &&
+          request.resource.data.name is string &&
+          request.resource.data.name.size() >= 1 &&
+          request.resource.data.name.size() <= 24 &&
+          request.resource.data.team == 'unassigned' &&
+          request.resource.data.ready == false &&
+          request.resource.data.caught == false &&
+          request.resource.data.joinedAt is number &&
+          request.resource.data.location == null &&
+          request.resource.data.lastPingAt == 0 &&
+          request.resource.data.sharingEnabled == false;
+
+        allow update: if signed() &&
+          request.resource.data.uid == resource.data.uid &&
+          request.resource.data.name == resource.data.name &&
+          request.resource.data.joinedAt == resource.data.joinedAt &&
+          (
+            // Each player may toggle only their own lobby Ready state.
+            (playerUid == request.auth.uid &&
+              room(id).status == 'lobby' &&
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ready']) &&
+              request.resource.data.ready is bool) ||
+            // Host assigns roles only in the SAME atomic transaction as the start.
+            (isHost(id) && room(id).status == 'lobby' &&
+              getAfter(roomPath(id)).data.status == 'active' &&
+              resource.data.team == 'unassigned' &&
+              resource.data.ready == true &&
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['team']) &&
+              request.resource.data.team in ['hunter','runner']) ||
+            // Players may publish/pause only their own approximate location or
+            // self-confirm a capture; roles cannot be changed after start.
+            (playerUid == request.auth.uid &&
+              room(id).status == 'active' &&
+              request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['location','lastPingAt','caught','sharingEnabled']) &&
+              request.resource.data.team == resource.data.team &&
+              request.resource.data.ready == resource.data.ready &&
+              validLocation(request.resource.data.location) &&
+              request.resource.data.sharingEnabled is bool &&
+              (request.resource.data.location == null || request.resource.data.sharingEnabled == true) &&
+              request.resource.data.lastPingAt is number &&
+              (resource.data.caught == false || request.resource.data.caught == true) &&
+              (request.resource.data.caught == false || request.resource.data.team == 'runner') &&
+              (request.resource.data.caught == false || request.resource.data.location == null) &&
+              (resource.data.caught == false || request.resource.data.location == null)) ||
+            (playerUid == request.auth.uid &&
+              room(id).status == 'finished' &&
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['location','sharingEnabled']) &&
+              request.resource.data.location == null &&
+              request.resource.data.sharingEnabled == false)
+          );
+
+        allow delete: if signed() && playerUid == request.auth.uid;
+      }
+    }
+  }
+}

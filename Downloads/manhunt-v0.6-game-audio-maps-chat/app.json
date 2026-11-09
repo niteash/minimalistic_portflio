@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "MenHunt",
+    "slug": "menhunt",
+    "scheme": "manhuntwalk",
+    "version": "0.6.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Share your approximate game position only while playing and while the app is open."
+      }
+    },
+    "android": {
+      "package": "com.example.manhuntwalk"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Use your location only during an active, consent-based game.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ce75d157-2a49-4ecc-80c1-adafda092ee1"
+      }
+    },
+    "owner": "shwenickys-team"
+  }
+}

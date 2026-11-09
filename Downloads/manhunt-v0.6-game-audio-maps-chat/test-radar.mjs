@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const src = readFileSync(new URL('./src/radar.js', import.meta.url), 'utf8');
+const {radarPoint, visibleApproximatePings} = await import(`data:text/javascript;base64,${Buffer.from(src).toString('base64')}`);
+const center = { latitude: 13.75, longitude: 100.5 };
+assert.deepEqual(radarPoint(center, center, 250), {x:0.5,y:0.5,distanceMeters:0});
+const east = radarPoint({latitude:13.75,longitude:100.501},center,250);
+assert.ok(east.x > 0.5 && east.y === 0.5);
+const now=1_700_000;
+const sample=(sharingEnabled,updatedAt,team='runner')=>({team, caught:false, sharingEnabled,location:{...center,updatedAt}});
+assert.equal(visibleApproximatePings([sample(true,now-1),sample(false,now-1),sample(true,now-120000)],now,'active').length,1);
+assert.equal(visibleApproximatePings([sample(true,now-1)],now,'finished').length,0);
+assert.equal(visibleApproximatePings([sample(true,now-50000,'hunter')],now,'active').length,0);
+console.log('v0.5 radar and sharing visibility tests passed.');

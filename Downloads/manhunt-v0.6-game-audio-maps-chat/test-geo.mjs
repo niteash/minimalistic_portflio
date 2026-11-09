@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const source = readFileSync(new URL('./src/geo.js', import.meta.url), 'utf8');
+const geo = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+assert.equal(geo.metersBetween({latitude:0,longitude:0},{latitude:0,longitude:0}), 0);
+const dist = geo.metersBetween({latitude:0,longitude:0},{latitude:0,longitude:1});
+assert.ok(dist > 110_000 && dist < 112_000, `bad Haversine: ${dist}`);
+assert.deepEqual(geo.approximate({latitude:16.12346,longitude:96.54321}), {latitude:16.123,longitude:96.543});
+for (let i = 0; i < 50; i++) assert.match(geo.createInviteCode(), /^[A-HJ-NP-Z2-9]{8}$/);
+const center = { latitude: 0, longitude: 0 };
+assert.equal(geo.safeZoneStatus({ ...center, accuracy: 10 }, center), 'inside');
+assert.equal(geo.safeZoneStatus({ ...center, accuracy: 80 }, center), 'unknown');
+assert.equal(geo.safeZoneStatus({ latitude: 0.001, longitude: 0, accuracy: 10 }, center), 'outside');
+assert.equal(geo.safeZoneStatus({ latitude: 0.0002, longitude: 0, accuracy: 10 }, center), 'uncertain');
+assert.equal(geo.safeZoneStatus(null, center), 'unknown');
+console.log('v0.4 geo + safe zone unit tests passed.');

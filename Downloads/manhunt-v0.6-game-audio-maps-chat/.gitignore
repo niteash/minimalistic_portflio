@@ -1,0 +1,13 @@
+node_modules/
+.expo/
+dist/
+.env
+*.log
+.DS_Store
+node_modules/
+.expo/
+.env
+.env.*
+!.env.example
+.DS_Store
+Library/

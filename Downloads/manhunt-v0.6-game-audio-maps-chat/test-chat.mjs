@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { chatCollectionSegments, channelAudience } from './src/chat.js';
+const rules = readFileSync('firestore.rules', 'utf8');
+assert.deepEqual(chatCollectionSegments('ABCD2345','all','hunter'), ['rooms','ABCD2345','publicMessages']);
+assert.deepEqual(chatCollectionSegments('ABCD2345','team','runner'), ['rooms','ABCD2345','teamMessages','runner','messages']);
+assert.throws(() => chatCollectionSegments('ABCD2345','team','unassigned'));
+assert.throws(() => chatCollectionSegments('fake','all','runner'));
+const players=[{team:'hunter'},{team:'runner'},{team:'runner'}];
+assert.equal(channelAudience(players,'all','hunter'),3);
+assert.equal(channelAudience(players,'team','runner'),2);
+assert.equal(channelAudience(players,'team','hunter'),1);
+assert.match(rules,/match \/publicMessages\/\{messageId\}/);
+assert.match(rules,/allow get, list: if isMember\(id\) && room\(id\).status in/);
+assert.match(rules,/match \/teamMessages\/\{team\}\/messages\/\{messageId\}/);
+assert.match(rules,/get\(playerPath\(id, request.auth.uid\)\).data.team == team/);
+assert.doesNotMatch(rules,/allow (read|write)\s*:\s*if true/);
+console.log('Chat path and security rule static tests passed (not a Firebase emulator test).');
