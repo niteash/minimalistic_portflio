@@ -876,9 +876,6 @@ export default function Home() {
                   </a>
                 )}
               </div>
-              <span className="micro cover-note">
-                {t("GENERATED PROJECT COVER")}
-              </span>
             </div>
           </div>
         </div>
